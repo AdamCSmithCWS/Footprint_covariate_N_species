@@ -1,0 +1,44 @@
+
+                      ###########insert the following text into an existing JAGS model##############
+                      ###########making sure to link the relevant parameters into section##############
+                      ###########of the model that estimates the full likelihood ##############
+                      ###################################################################
+                      ###################################################################
+                      # the GAM smooth is predicted as intercepts for each whole value of the
+                      # predictor (e.g., each year in a temporal smooth)
+                      # so the likelihood line will need to include a component such as the following for each data point-i
+                      # for (i in 1:n){
+                      # y[i] <- ..... + gam.sm_age[i] +....
+                      #}
+                      
+                      ######
+                      #the effect of this prior is worth exploring
+                      #alternatives such as uniform priors on the SD or half-Cauchy may perform better
+                      taugam_age~dgamma(1.0E-2,1.0E-4) #original from Cainiceanu et al. second gamma parameter == 0.0001 << (abs(mean(B.gamx[]))^2)/2, mean(B.gamx[]) ~ 0.2
+                      sdgam_age <- 1/(pow(taugam_age,0.5)) # 
+                      #or
+                      sdgam_age <- 1/pow(taunoise,0.5)
+                      taugam_age ~ dscaled.gamma(0.5,50)
+                      # Computation of GAM components
+                      for(k in 1:nknots_age){
+                      beta_age[k] ~ dnorm(0,taugam_age)
+                      }
+                      
+                      gam.sm_age <-	age_basis %*% beta_age
+                      
+                      
+                      ##### derived parameters to visualize the smooth
+                      
+                      vis.sm_age <-	age_basispred %*% beta_age
+                      
+                      ##### suggested components to add to annual index calculation
+                      #### value of vis.sm_age below is just the middle of the values used to visualize the smooth, i.e., predpoints[round(0.5*npredpoints)]
+                      #### if there is a better value then insert the index for the relevant value of predpoints
+                      # for(y in 1:nyears){
+                      # for(s in 1:nstrata){
+                      # n[i,t] <- exp(strata[i] + beta[i]*(t-fixedyear) + yeareffect[i,t] + vis.sm_age[34] ) 
+                      # }
+                      # }
+                      # 	
+                      #----------------------------------#
+                      
