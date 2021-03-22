@@ -1,8 +1,7 @@
 // This is a Stan implementation of a route-level slope model
 // with an explicitly spatial prior structure on the 
 // random effects for route-level intercepts and slopes
-// AND it has route-level covariates
-// and this model has no random year-effects - slope only
+// AND it has route-level covariates on the slopes and intercepts that vary by species
 
 
 //iCAR function
@@ -169,6 +168,11 @@ vector[ncounts7] noise_raw7;
   real B_cov;         // covariate effects on slope
   real A_cov;         // covariate effects on intercept
 
+  vector[nspecies] b_cov_raw; // species-level random effects on slopes
+  vector[nspecies] a_cov_raw; // species-level random effects on slopes
+
+  real<lower=0> sdb_cov;    // sd of over-dispersion 
+  real<lower=0> sda_cov;    // sd of over-dispersion 
 
 //real<lower=1> nu;  //optional heavy-tail df for t-distribution
   real<lower=0> sdobs;    // sd of observer effects
@@ -189,9 +193,12 @@ vector[ncounts7] noise_raw7;
   
 model {
 
-vector[nobservers] obs ;             // observer effects by species - consider pooling across all species
-vector[nrts_cov] cov_b_adj; // covariate effects on slope same across all species
-vector[nrts_cov] cov_a_adj; // covariate effects on intercept same across all species
+vector[nobservers] obs;             // observer effects by species - consider pooling across all species
+matrix[nrts_cov,nspecies] cov_b_adj; // covariate effects on slope vary among species
+matrix[nrts_cov,nspecies] cov_a_adj; // covariate effects on intercept vary among species
+
+  vector[nspecies] b_cov; // species-level random effects on slopes
+  vector[nspecies] a_cov; // species-level random effects on slopes
 
 
 //by species     
@@ -232,13 +239,26 @@ vector[ncounts7] noise7;
 
   
   B_cov ~ normal(0,0.1);//covariate effect on slope parameters
-
-  cov_b_adj = B_cov*rt_cov_dat;
-
   A_cov ~ normal(0,0.1);//covariate effect on intercept parameters
+  
+    sdb_cov ~ normal(0,0.1); //prior on sd of slope covariate parameters
+  b_cov_raw ~ std_normal();//species level slope covariate effects
+  sum(b_cov_raw) ~ normal(0,0.001*nspecies); //sum to zero constraint
+  b_cov = (sdb_cov * b_cov_raw) + B_cov;
+  
+    sda_cov ~ std_normal(); //prior on sd of intercept covariate parameters
+  a_cov_raw ~ std_normal();//species level intercept covariate effects
+  sum(a_cov_raw) ~ normal(0,0.001*nspecies); //sum to zero constraint
+  a_cov = (sda_cov * a_cov_raw) + A_cov;
 
-  cov_a_adj = A_cov*rt_cov_dat;
- 
+
+for(s in 1:nspecies){
+  cov_b_adj[,s] = b_cov[s]*rt_cov_dat;
+  cov_a_adj[,s] = a_cov[s]*rt_cov_dat;
+
+}
+
+
   sdnoise ~ normal(0,0.5); //prior on scale of extra Poisson log-normal variance
   
   sdobs ~ std_normal(); //prior on sd of gam hyperparameters
@@ -266,7 +286,7 @@ vector[ncounts7] noise7;
   beta1 =  (sdbeta[1]*beta_raw1) + BETA[1];
   noise1 =  (sdnoise[1]*noise_raw1);
    for(i in 1:ncounts1){
-     E1[i] = (beta1[route1[i]] + cov_b_adj[route_cov1[i]]) * (year1[i]-fixedyear) + alpha1[route1[i]] + obs[observer1[i]] + cov_a_adj[route_cov1[i]] + noise1[i]; // 
+     E1[i] = (beta1[route1[i]] + cov_b_adj[route_cov1[i],1]) * (year1[i]-fixedyear) + alpha1[route1[i]] + obs[observer1[i]] + cov_a_adj[route_cov1[i],1] + noise1[i]; // 
   }
     count1 ~ poisson_log(E1); // count likelihood with log-transformation
 
@@ -279,7 +299,7 @@ vector[ncounts7] noise7;
   beta2 =  (sdbeta[2]*beta_raw2) + BETA[2];
   noise2 =  (sdnoise[2]*noise_raw2);
    for(i in 1:ncounts2){
-     E2[i] = (beta2[route2[i]] + cov_b_adj[route_cov2[i]])  * (year2[i]-fixedyear) + alpha2[route2[i]] + obs[observer2[i]] + cov_a_adj[route_cov2[i]] + noise2[i]; // 
+     E2[i] = (beta2[route2[i]] + cov_b_adj[route_cov2[i],2])  * (year2[i]-fixedyear) + alpha2[route2[i]] + obs[observer2[i]] + cov_a_adj[route_cov2[i],2] + noise2[i]; // 
   }
     count2 ~ poisson_log(E2); // count likelihood with log-transformation
 
@@ -292,7 +312,7 @@ vector[ncounts7] noise7;
   beta3 =  (sdbeta[3]*beta_raw3) + BETA[3];
   noise3 =  (sdnoise[3]*noise_raw3);
    for(i in 1:ncounts3){
-     E3[i] = (beta3[route3[i]] + cov_b_adj[route_cov3[i]])  * (year3[i]-fixedyear) + alpha3[route3[i]] + obs[observer3[i]] + cov_a_adj[route_cov3[i]] + noise3[i]; // 
+     E3[i] = (beta3[route3[i]] + cov_b_adj[route_cov3[i],3])  * (year3[i]-fixedyear) + alpha3[route3[i]] + obs[observer3[i]] + cov_a_adj[route_cov3[i],3] + noise3[i]; // 
   }
     count3 ~ poisson_log(E3); // count likelihood with log-transformation
 
@@ -304,7 +324,7 @@ vector[ncounts7] noise7;
   beta4 =  (sdbeta[4]*beta_raw4) + BETA[4];
   noise4 =  (sdnoise[4]*noise_raw4);
    for(i in 1:ncounts4){
-     E4[i] = (beta4[route4[i]] + cov_b_adj[route_cov4[i]])  * (year4[i]-fixedyear) + alpha4[route4[i]] + obs[observer4[i]] + cov_a_adj[route_cov4[i]] + noise4[i]; // 
+     E4[i] = (beta4[route4[i]] + cov_b_adj[route_cov4[i],4])  * (year4[i]-fixedyear) + alpha4[route4[i]] + obs[observer4[i]] + cov_a_adj[route_cov4[i],4] + noise4[i]; // 
   }
     count4 ~ poisson_log(E4); // count likelihood with log-transformation
 
@@ -316,7 +336,7 @@ vector[ncounts7] noise7;
   beta5 =  (sdbeta[5]*beta_raw5) + BETA[5];
   noise5 =  (sdnoise[5]*noise_raw5);
    for(i in 1:ncounts5){
-     E5[i] = (beta5[route5[i]] + cov_b_adj[route_cov5[i]])  * (year5[i]-fixedyear) + alpha5[route5[i]] + obs[observer5[i]] + cov_a_adj[route_cov5[i]] + noise5[i]; // 
+     E5[i] = (beta5[route5[i]] + cov_b_adj[route_cov5[i],5])  * (year5[i]-fixedyear) + alpha5[route5[i]] + obs[observer5[i]] + cov_a_adj[route_cov5[i],5] + noise5[i]; // 
   }
     count5 ~ poisson_log(E5); // count likelihood with log-transformation
 
@@ -329,7 +349,7 @@ vector[ncounts7] noise7;
   beta6 =  (sdbeta[6]*beta_raw6) + BETA[6];
   noise6 =  (sdnoise[6]*noise_raw6);
    for(i in 1:ncounts6){
-     E6[i] = (beta6[route6[i]] + cov_b_adj[route_cov6[i]])  * (year6[i]-fixedyear) + alpha6[route6[i]] + obs[observer6[i]] + cov_a_adj[route_cov6[i]] + noise6[i]; // 
+     E6[i] = (beta6[route6[i]] + cov_b_adj[route_cov6[i],6])  * (year6[i]-fixedyear) + alpha6[route6[i]] + obs[observer6[i]] + cov_a_adj[route_cov6[i],6] + noise6[i]; // 
   }
     count6 ~ poisson_log(E6); // count likelihood with log-transformation
 
@@ -342,7 +362,7 @@ vector[ncounts7] noise7;
   beta7 =  (sdbeta[7]*beta_raw7) + BETA[7];
   noise7 =  (sdnoise[7]*noise_raw7);
    for(i in 1:ncounts7){
-     E7[i] = (beta7[route7[i]] + cov_b_adj[route_cov7[i]])  * (year7[i]-fixedyear) + alpha7[route7[i]] + obs[observer7[i]] + cov_a_adj[route_cov7[i]] + noise7[i]; // 
+     E7[i] = (beta7[route7[i]] + cov_b_adj[route_cov7[i],7])  * (year7[i]-fixedyear) + alpha7[route7[i]] + obs[observer7[i]] + cov_a_adj[route_cov7[i],7] + noise7[i]; // 
   }
     count7 ~ poisson_log(E7); // count likelihood with log-transformation
 
@@ -390,19 +410,28 @@ vector[nroutes7] beta7;
 vector[ncounts7] noise7;
 
    vector[nobservers] obs ;             // observer effects by species - consider pooling across all species
+
+
+matrix[nrts_cov,nspecies] cov_b_adj; // covariate effects on slope vary among species
+matrix[nrts_cov,nspecies] cov_a_adj; // covariate effects on intercept vary among species
+
+  vector[nspecies] b_cov; // species-level random effects on slopes
+  vector[nspecies] a_cov; // species-level random effects on slopes
+
+
+ 
   obs = sdobs*obs_raw;
 
 
-vector[nrts_cov] cov_b_adj; // covariate effects on slope same across all species
-vector[nrts_cov] cov_a_adj; // covariate effects on intercept same across all species
+  b_cov = (sdb_cov * b_cov_raw) + B_cov;
+  a_cov = (sda_cov * a_cov_raw) + A_cov;
 
 
- 
+for(s in 1:nspecies){
+  cov_b_adj[,s] = b_cov[s]*rt_cov_dat;
+  cov_a_adj[,s] = a_cov[s]*rt_cov_dat;
 
-  cov_b_adj = B_cov*rt_cov_dat;
-
-  cov_a_adj = A_cov*rt_cov_dat;
- 
+}
 
 
 
@@ -411,7 +440,7 @@ vector[nrts_cov] cov_a_adj; // covariate effects on intercept same across all sp
   beta1 =  (sdbeta[1]*beta_raw1) + BETA[1];
   noise1 =  (sdnoise[1]*noise_raw1);
    for(i in 1:ncounts1){
-     E1[i] =   (beta1[route1[i]] + cov_b_adj[route_cov1[i]]) * (year1[i]-fixedyear) + alpha1[route1[i]] + obs[observer1[i]] + cov_a_adj[route_cov1[i]] + noise1[i]; // 
+     E1[i] =   (beta1[route1[i]] + cov_b_adj[route_cov1[i],1]) * (year1[i]-fixedyear) + alpha1[route1[i]] + obs[observer1[i]] + cov_a_adj[route_cov1[i],1] + noise1[i]; // 
      log_lik[i] = poisson_log_lpmf(count1[i] | E1[i]);
  }
 
@@ -420,7 +449,7 @@ vector[nrts_cov] cov_a_adj; // covariate effects on intercept same across all sp
   beta2 =  (sdbeta[2]*beta_raw2) + BETA[2];
   noise2 =  (sdnoise[2]*noise_raw2);
    for(i in 1:ncounts2){
-     E2[i] =  (beta2[route2[i]] + cov_b_adj[route_cov2[i]]) * (year2[i]-fixedyear) + alpha2[route2[i]] + obs[observer2[i]] + cov_a_adj[route_cov2[i]] + noise2[i]; // 
+     E2[i] =  (beta2[route2[i]] + cov_b_adj[route_cov2[i],2]) * (year2[i]-fixedyear) + alpha2[route2[i]] + obs[observer2[i]] + cov_a_adj[route_cov2[i],2] + noise2[i]; // 
      log_lik[i+ncounts1] = poisson_log_lpmf(count2[i] | E2[i]);
  }
 
@@ -430,7 +459,7 @@ vector[nrts_cov] cov_a_adj; // covariate effects on intercept same across all sp
   beta3 =  (sdbeta[3]*beta_raw3) + BETA[3];
   noise3 =  (sdnoise[3]*noise_raw3);
    for(i in 1:ncounts3){
-     E3[i] = (beta3[route3[i]] + cov_b_adj[route_cov3[i]]) * (year3[i]-fixedyear) + alpha3[route3[i]] + obs[observer3[i]] + cov_a_adj[route_cov3[i]] + noise3[i]; // 
+     E3[i] = (beta3[route3[i]] + cov_b_adj[route_cov3[i],3]) * (year3[i]-fixedyear) + alpha3[route3[i]] + obs[observer3[i]] + cov_a_adj[route_cov3[i],3] + noise3[i]; // 
     log_lik[i+ncounts1+ncounts2] = poisson_log_lpmf(count3[i] | E3[i]);
 }
 
@@ -438,7 +467,7 @@ vector[nrts_cov] cov_a_adj; // covariate effects on intercept same across all sp
   beta4 =  (sdbeta[4]*beta_raw4) + BETA[4];
   noise4 =  (sdnoise[4]*noise_raw4);
    for(i in 1:ncounts4){
-     E4[i] = (beta4[route4[i]] + cov_b_adj[route_cov4[i]]) * (year4[i]-fixedyear) + alpha4[route4[i]] + obs[observer4[i]] + cov_a_adj[route_cov4[i]] + noise4[i]; // 
+     E4[i] = (beta4[route4[i]] + cov_b_adj[route_cov4[i],4]) * (year4[i]-fixedyear) + alpha4[route4[i]] + obs[observer4[i]] + cov_a_adj[route_cov4[i],4] + noise4[i]; // 
     log_lik[i+ncounts1+ncounts2+ncounts3] = poisson_log_lpmf(count4[i] | E4[i]);
 }
  
@@ -447,7 +476,7 @@ vector[nrts_cov] cov_a_adj; // covariate effects on intercept same across all sp
   beta5 =  (sdbeta[5]*beta_raw5) + BETA[5];
   noise5 =  (sdnoise[5]*noise_raw5);
    for(i in 1:ncounts5){
-     E5[i] = (beta5[route5[i]] + cov_b_adj[route_cov5[i]]) * (year5[i]-fixedyear) + alpha5[route5[i]] + obs[observer5[i]] + cov_a_adj[route_cov5[i]] + noise5[i]; // 
+     E5[i] = (beta5[route5[i]] + cov_b_adj[route_cov5[i],5]) * (year5[i]-fixedyear) + alpha5[route5[i]] + obs[observer5[i]] + cov_a_adj[route_cov5[i],5] + noise5[i]; // 
     log_lik[i+ncounts1+ncounts2+ncounts3+ncounts4] = poisson_log_lpmf(count5[i] | E5[i]);
  }
 
@@ -455,7 +484,7 @@ vector[nrts_cov] cov_a_adj; // covariate effects on intercept same across all sp
   beta6 =  (sdbeta[6]*beta_raw6) + BETA[6];
   noise6 =  (sdnoise[6]*noise_raw6);
    for(i in 1:ncounts6){
-     E6[i] = (beta6[route6[i]] + cov_b_adj[route_cov6[i]]) * (year6[i]-fixedyear) + alpha6[route6[i]] + obs[observer6[i]] + cov_a_adj[route_cov6[i]] + noise6[i]; // 
+     E6[i] = (beta6[route6[i]] + cov_b_adj[route_cov6[i],6]) * (year6[i]-fixedyear) + alpha6[route6[i]] + obs[observer6[i]] + cov_a_adj[route_cov6[i],6] + noise6[i]; // 
     log_lik[i+ncounts1+ncounts2+ncounts3+ncounts4+ncounts5] = poisson_log_lpmf(count6[i] | E6[i]);
  }
 
@@ -463,7 +492,7 @@ vector[nrts_cov] cov_a_adj; // covariate effects on intercept same across all sp
   beta7 =  (sdbeta[7]*beta_raw7) + BETA[7];
   noise7 =  (sdnoise[7]*noise_raw7);
    for(i in 1:ncounts7){
-     E7[i] = (beta7[route7[i]] + cov_b_adj[route_cov7[i]]) * (year7[i]-fixedyear) + alpha7[route7[i]] + obs[observer7[i]] + cov_a_adj[route_cov7[i]] + noise7[i]; // 
+     E7[i] = (beta7[route7[i]] + cov_b_adj[route_cov7[i],7]) * (year7[i]-fixedyear) + alpha7[route7[i]] + obs[observer7[i]] + cov_a_adj[route_cov7[i],7] + noise7[i]; // 
     log_lik[i+ncounts1+ncounts2+ncounts3+ncounts4+ncounts5+ncounts6] = poisson_log_lpmf(count7[i] | E7[i]);
  }
 

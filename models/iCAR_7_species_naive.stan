@@ -334,6 +334,7 @@ vector[ncounts7] noise7;
 
   generated quantities {
 
+   real log_lik[ncounts]; 
 
 
 //by species     
@@ -373,18 +374,7 @@ vector[nroutes7] beta7;
 vector[ncounts7] noise7;
 
    vector[nobservers] obs ;             // observer effects by species - consider pooling across all species
-   real log_lik[ncounts]; 
- 
- // real n_r_age[nroutes,nyears,nspecies]; // array of route level annual indices
- //  
- //  real n_age[nyears,nspecies]; // matrix of annual indices by species
- //  real n_r[nroutes,nyears,nspecies]; // array of route level annual indices
- //  
- //  real n[nyears,nspecies]; // matrix of annual indices by species
- // 
-
-
-
+   
   obs = sdobs*obs_raw;
 
 

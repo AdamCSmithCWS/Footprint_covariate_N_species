@@ -11,6 +11,7 @@ library(spdep)
 library(patchwork)
  library(ggforce)
  library(tidybayes)
+library(loo)
 source("functions/mungeCARdata4stan.R") ## function to modify the BUGS formatted spatial neighbourhood data to the required format for the Stan iCAR model
 #source("functions/prepare-jags-data-alt.R") ## small alteration of the bbsBayes function
 #source("functions/GAM_basis_function.R") ## simple function to produce the GAM basis function that enters the Stan model as data
@@ -58,7 +59,8 @@ species_list = sp_sel1[which(sp_sel1 %in% sp_consider)]
 
 nspecies = 7
 
-species_list = species_list[c(1:3,5,7,8,9)]
+#species_list = species_list[c(1:7)]
+species_list = species_list[c(1:3,5,7:9)]
 
 # nspecies = length(species_list)
 
@@ -368,7 +370,7 @@ if(ncs1 != ncounts){stop(paste("Incorrect counting of counts ncs1=",ncs1, "and n
 
 #  ------------------------------
 
-mod.file = paste0("models/iCAR_",nspecies,"_species_cov.stan")
+mod.file = paste0("models/iCAR_",nspecies,"_species_cov_hier.stan")
 
 # parms = c("sdnoise",
 #           "sdobs",
@@ -388,7 +390,11 @@ parms = c("log_lik",
           "ALPHA",
           "BETA",
           "A_cov",
-          "B_cov")
+          "B_cov",
+          "b_cov",
+          "a_cov",
+          "sdb_cov",
+          "sda_cov")
 
 ## compile model
 model = stan_model(file=mod.file)
@@ -396,19 +402,19 @@ model = stan_model(file=mod.file)
 print(paste(group_name,nspecies,"cov"))
 
 ## run sampler on model, data
-stanfit <- sampling(model,
+stanfit_hier <- sampling(model,
                           data=stan_data,
                           verbose=TRUE, refresh=50,
-                          chains=3, iter=1100,
-                          warmup=800,
+                          chains=3, iter=2200,
+                          warmup=1600,
                           cores = 3,
                           pars = parms,
-                          control = list(adapt_delta = 0.9,
+                          control = list(adapt_delta = 0.8,
                                          max_treedepth = 15))
 
 
-save(list = c("stanfit","stan_data","vintj","route_map","sel_bbs","species_list","species_df"),
-     file = paste0("output/",group_name,"_",nspecies,"_cov_adj_output.RData"))
+save(list = c("stanfit_hier","stan_data","vintj","route_map","sel_bbs","species_list","species_df"),
+     file = paste0("output/",group_name,"_",nspecies,"_hier_cov_adj_output.RData"))
 
 
 launch_shinystan(stanfit) 
@@ -434,22 +440,24 @@ launch_shinystan(stanfit)
 
 stan_data_naive <- stan_data
 
+to_nullify <- names(stan_data)[grepl(names(stan_data),pattern = "cov")]
 
-stan_data_naive[["age"]] <- NULL
-stan_data_naive[["nages"]] <- NULL
-stan_data_naive[["age_basispred"]] <- NULL
-stan_data_naive[["nknots_age"]] <- NULL
+for(nn in to_nullify){
+stan_data_naive[[nn]] <- NULL
+}
+
+
 
 print(paste(group_name,nspecies,"naive"))
   ## run sampler on model, data
   stanfit_naive <- sampling(model,
-                           data=stan_data,
+                           data=stan_data_naive,
                            verbose=TRUE, refresh=50,
-                           chains=4, iter=1100,
-                           warmup=800,
-                           cores = 4,
+                           chains=3, iter=2200,
+                           warmup=1600,
+                           cores = 3,
                            pars = parms,
-                           control = list(adapt_delta = 0.9,
+                           control = list(adapt_delta = 0.8,
                                           max_treedepth = 15))
 
 
@@ -463,10 +471,12 @@ print(paste(group_name,nspecies,"naive"))
 #   
 #   launch_shinystan(stanfit_naive)
 
-
-
-
-
+  loo_stanfit <- loo(stanfit)
+  loo_stanfit_naive <- loo(stanfit_naive)
+  
+  loo_stanfit
+  loo_stanfit_naive
+  
 ####### see scipt "Results_plotting_initial.R"
 
 
