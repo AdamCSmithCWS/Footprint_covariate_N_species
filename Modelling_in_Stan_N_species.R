@@ -349,6 +349,9 @@ stan_data[[paste0("year",i)]] <- tmp$year
 stan_data[[paste0("route",i)]] <- tmp$routeF
 stan_data[[paste0("route_cov",i)]] <- tmp$rts_cov
 stan_data[[paste0("observer",i)]] <- tmp$observer
+tmp_cov_rt <- unique(tmp[,c("rts_cov","routeF")])
+tmp_cov_rt <- tmp_cov_rt[order(tmp_cov_rt$routeF),]
+stan_data[[paste0("cov_routes",i)]] <- as.integer(tmp_cov_rt$rts_cov)
 
 ncounts = ncounts+nrow(tmp)
 
@@ -358,7 +361,7 @@ stan_data[["ncounts"]] <- ncounts
 
 
 
-if(length(stan_data) != 7+nspecies*10){stop("Something missing from stan_data object")}
+if(length(stan_data) != 7+nspecies*11){stop("Something missing from stan_data object")}
 ch_ns <- paste0("ncounts",1:nspecies)
 ncs1 = 0
 for(j in ch_ns){
@@ -386,6 +389,8 @@ parms = c("log_lik",
           "sdnoise",
           paste0("alpha",1:nspecies),
           paste0("beta",1:nspecies),
+          paste0("alpha",1:nspecies,"_adj"),
+          paste0("beta",1:nspecies,"_adj"),
           "obs",
           "ALPHA",
           "BETA",
